@@ -1,0 +1,19 @@
+name: kemal-cookie-session
+version: 0.1.0
+
+authors:
+  - Hugo Parente Lima <hugo.pl@gmail.com>
+
+crystal: '>= 1.19.1'
+
+license: MIT
+
+description: |
+  Sessions for Kemal stored in an AES-256-GCM encrypted cookie that is
+  byte-compatible with Rails 8's ActionDispatch::Session::CookieStore. Exposes
+  the kemal-session API (cannot be used alongside kemal-session).
+
+dependencies:
+  kemal:
+    github: kemalcr/kemal
+    version: ">= 1.0.0"
