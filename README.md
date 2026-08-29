@@ -231,6 +231,38 @@ Because the write is deferred, `CookieOverflow` surfaces at that commit rather
 than from the setter that made the session too big. `env.session.save` still
 writes immediately if you need it — useful only before the body starts.
 
+### Long-lived connections (SSE, WebSocket)
+
+`env.session` is decrypted once, from the `Cookie` header of the request that
+opened the connection, and lives in memory as a plain `Hash` for as long as
+that connection stays open. There is no way to refresh it mid-connection, and
+no way to write it back out either — `Set-Cookie` is a header, and HTTP sends
+headers exactly once, before the body. This is true of SSE, WebSocket, and
+HTTP/2 or HTTP/3 alike (HTTP/2 has a formal *trailers* concept, but no browser
+applies `Set-Cookie` from one). So once you've written the first byte to an SSE
+response, further session mutations raise `ResponseAlreadySent` (see above) —
+there is no header left to put the cookie on.
+
+Two consequences worth designing around:
+
+- **Reads and writes need separate requests.** Treat an SSE connection as
+  read-only: decide everything session-dependent before the first `print`, then
+  stream. To let the client change session state while the stream is open, have
+  it hit an ordinary route (e.g. a `fetch()` alongside the open `EventSource`)
+  — that request gets its own `Set-Cookie` normally. The open SSE connection
+  won't see the change; only a fresh connection (reconnect) will, since only a
+  new connection sends a new `Cookie` header.
+- **Authorization can go stale for the life of the connection.** If a route
+  decides what to stream (which room, which user's data) from `env.session` at
+  connection time, a permission change afterwards — logout, role change, ban —
+  has no way to reach an already-open connection. Don't treat that snapshot as
+  a standing authorization check: re-validate against your actual source of
+  truth (not the cached session hash) before sending each event, and/or bound
+  connection lifetime (periodic forced reconnect) so a stale grant can't
+  outlive it for long. Tracking open connections server-side to close them on
+  revocation works too, but that's server-side state this shard deliberately
+  doesn't provide — it's on the app.
+
 ### Flash
 
 A minimal, read-once flash (kemal-session compatible; **not** Rails' FlashHash):
